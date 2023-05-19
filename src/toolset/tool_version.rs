@@ -79,6 +79,7 @@ impl ToolVersion {
             ToolVersionRequest::Prefix(_, _) => self.version.to_string(),
             ToolVersionRequest::Ref(_, r) => format!("ref-{}", r),
             ToolVersionRequest::Path(_, p) => format!("path-{}", hash_to_str(p)),
+            ToolVersionRequest::Sub(_, s) => format!("sub-{}", s),
             ToolVersionRequest::System(_) => "system".to_string(),
         }
     }
@@ -101,6 +102,11 @@ impl ToolVersion {
             }
             Some(("prefix", p)) => {
                 return Self::resolve_prefix(config, tool, request, p, opts);
+            }
+            Some((part, v)) if part.starts_with("sub-") => {
+                dbg!(part, v);
+                let sub = part.split_once('-').unwrap().1;
+                return Self::resolve_sub(config, tool, request, latest_versions, sub, v, opts);
             }
             _ => (),
         }
@@ -136,32 +142,25 @@ impl ToolVersion {
         if matches.contains(&v) {
             return build(v);
         }
-        if v.contains("!-") {
-            if let Some(tv) = Self::resolve_bang(config, tool, request.clone(), &v, &opts)? {
-                return Ok(tv);
-            }
-        }
         Self::resolve_prefix(config, tool, request, &v, opts)
     }
 
-    /// resolve a version like `12.0.0!-1` which becomes `11.0.0`, `12.1.0!-0.1` becomes `12.0.0`
-    fn resolve_bang(
+    /// resolve a version like `sub-1:12.0.0` which becomes `11.0.0`, `sub-0.1:12.1.0` becomes `12.0.0`
+    fn resolve_sub(
         config: &Config,
         tool: &Tool,
         request: ToolVersionRequest,
+        latest_versions: bool,
+        sub: &str,
         v: &str,
-        opts: &ToolVersionOptions,
-    ) -> Result<Option<Self>> {
-        let (wanted, minus) = v.split_once("!-").unwrap();
-        let wanted = match wanted {
+        opts: ToolVersionOptions,
+    ) -> Result<Self> {
+        let v = match v {
             "latest" => tool.latest_version(&config.settings, None)?.unwrap(),
-            _ => config.resolve_alias(&tool.name, wanted)?,
+            _ => config.resolve_alias(&tool.name, v)?,
         };
-        let wanted = version_sub(&wanted, minus);
-        let tv = tool
-            .latest_version(&config.settings, Some(wanted))?
-            .map(|v| Self::new(tool, request, opts.clone(), v));
-        Ok(tv)
+        let v = version_sub(&v, sub);
+        Self::resolve_version(config, tool, request, latest_versions, &v, opts)
     }
 
     fn resolve_prefix(

@@ -14,6 +14,7 @@ pub enum ToolVersionRequest {
     Prefix(PluginName, String),
     Ref(PluginName, String),
     Path(PluginName, PathBuf),
+    Sub(PluginName, String, String),
     System(PluginName),
 }
 
@@ -27,6 +28,7 @@ impl ToolVersionRequest {
             Some(("ref", r)) => Self::Ref(plugin_name, r.to_string()),
             Some(("prefix", p)) => Self::Prefix(plugin_name, p.to_string()),
             Some(("path", p)) => Self::Path(plugin_name, PathBuf::from(p)),
+            Some((p, v)) if p.starts_with("sub-") => Self::Sub(plugin_name, v.to_string(), p.to_string()),
             None => {
                 if s == "system" {
                     Self::System(plugin_name)
@@ -44,6 +46,7 @@ impl ToolVersionRequest {
             Self::Prefix(p, _) => p,
             Self::Ref(p, _) => p,
             Self::Path(p, _) => p,
+            Self::Sub(p, _, _) => p,
             Self::System(p) => p,
         }
     }
@@ -54,6 +57,7 @@ impl ToolVersionRequest {
             Self::Prefix(_, p) => format!("prefix:{p}"),
             Self::Ref(_, r) => format!("ref:{r}"),
             Self::Path(_, p) => format!("path:{}", p.display()),
+            Self::Sub(_, v, p) => format!("sub-{}:{}", p, v),
             Self::System(_) => "system".to_string(),
         }
     }
